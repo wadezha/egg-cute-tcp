@@ -1,0 +1,52 @@
+'use strict';
+
+exports.tcp = {
+  app: true,
+  pubSubType: 'redis',
+  pubSubClient: '',
+  pubSubChannel: 'cute-tcp:pub_sub',
+  eventSend: 'client.send',
+  eventKickout: 'client.kickout',
+  client: {
+    port: 1883,
+    protocol: 'ect',
+    enableDispatchQueue: false,
+    idleTimeout: 300,
+    keepAlive: 60 * 1000,
+    sessionRedisClient: '',
+    sessionKeyCacheKey: '',
+    sessionIdCacheKey: '',
+    parserPath: '',
+    chainPath: '',
+    inChain: [],
+    outChain: [],
+  },
+  // clients: {
+  //   bsj: {
+  //     port: 1882,
+  //     enableDispatchQueue: false,
+  //     idleTimeout: 300,
+  //     keepAlive: 60 * 1000,
+  //     sessionRedisClient: '',
+  //     sessionKeyCacheKey: '',
+  //     sessionIdCacheKey: '',
+  //     parserPath: '',
+  //     chainPath: '',
+  //     inChain: [],
+  //     outChain: [],
+  //   },
+  //   swd: {
+  //     port: 1881,
+  //     enableDispatchQueue: false,
+  //     idleTimeout: 300,
+  //     keepAlive: 60 * 1000,
+  //     sessionRedisClient: '',
+  //     sessionKeyCacheKey: '',
+  //     sessionIdCacheKey: '',
+  //     parserPath: '',
+  //     chainPath: '',
+  //     inChain: [],
+  //     outChain: [],
+  //   },
+  // }
+};
