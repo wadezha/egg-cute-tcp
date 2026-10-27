@@ -14,12 +14,15 @@ exports.tcp = {
     idleTimeout: 300,
     keepAlive: 60 * 1000,
     sessionRedisClient: '',
-    sessionKeyCacheKey: '',
-    sessionIdCacheKey: '',
+    sessionKeyCacheKey: 'tcp:{ect}:session:key',
+    sessionIdCacheKey: 'tcp:{ect}:session:id',
     parserPath: '',
     chainPath: '',
     inChain: [],
     outChain: [],
+    tls: {
+      enable: false,
+    },
   },
   // clients: {
   //   bsj: {
@@ -28,12 +31,15 @@ exports.tcp = {
   //     idleTimeout: 300,
   //     keepAlive: 60 * 1000,
   //     sessionRedisClient: '',
-  //     sessionKeyCacheKey: '',
-  //     sessionIdCacheKey: '',
+  //     sessionKeyCacheKey: 'tcp:{bsj}:session:key',
+  //     sessionIdCacheKey: 'tcp:{bsj}:session:id',
   //     parserPath: '',
   //     chainPath: '',
   //     inChain: [],
   //     outChain: [],
+  //     tls: {
+  //      enable: false,
+  //     },
   //   },
   //   swd: {
   //     port: 1881,
@@ -41,12 +47,15 @@ exports.tcp = {
   //     idleTimeout: 300,
   //     keepAlive: 60 * 1000,
   //     sessionRedisClient: '',
-  //     sessionKeyCacheKey: '',
-  //     sessionIdCacheKey: '',
+  //     sessionKeyCacheKey: 'tcp:{swd}:session:key',
+  //     sessionIdCacheKey: 'tcp:{swd}:session:id',
   //     parserPath: '',
   //     chainPath: '',
   //     inChain: [],
   //     outChain: [],
+  //     tls: {
+  //      enable: false,
+  //     },
   //   },
   // }
 };

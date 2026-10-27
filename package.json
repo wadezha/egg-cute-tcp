@@ -1,6 +1,6 @@
 {
   "name": "egg-cute-tcp",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "TCP plugin for egg",
   "eggPlugin": {
     "name": "tcp",
@@ -21,7 +21,7 @@
   },
   "devDependencies": {
     "autod": "^3.0.1",
-    "egg": "latest-1",
+    "egg": "^3.5.1",
     "egg-bin": "^4.7.0",
     "egg-ci": "^1.8.0",
     "eslint": "^4.19.1",

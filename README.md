@@ -109,7 +109,7 @@ const { Chain } = require('egg-cute-tcp');
 
 class Encrypt extends Chain {
   async handle(session, message, sessionHub) {
-    // `message` is whatever was passed to session.send() / sessionHub.send().
+    // `message` is whatever was passed to sessionHub.send().
     // The last out-chain handler must return a Buffer or a string.
     return { message: Buffer.from(JSON.stringify(message)) };
   }
@@ -202,7 +202,7 @@ await swd.sessionHub.send(imei, message);
 | --- | --- | --- |
 | `port` | `1883` | TCP port to listen on. |
 | `protocol` | `'ect'` | Device protocol identifier. Pub/Sub messages carry it, so devices of different protocols never interfere with each other. With `clients`, it is always the client's key and any configured value is overridden. |
-| `enableDispatchQueue` | `false` | Process the messages of one connection strictly one after another. Guarantees ordering, but a burst of data from one device queues up in memory. |
+| `enableDispatchQueue` | `false` | Process the data **received from** one connection strictly one after another. Guarantees ordering, but a burst of data from one device queues up in memory. It does not order `send()` calls, see [Ordering](#sessionhubsendsessionkey-message). |
 | `idleTimeout` | `300` | Idle timeout in **seconds**; must be a positive integer. The connection is closed when no data has been received from the device for this long. Data sent by the server does not reset it. |
 | `keepAlive` | `60000` | Initial delay of TCP keep-alive probes in **milliseconds**. |
 | `sessionRedisClient` | `''` | Name of the `egg-redis` client that stores sessions, i.e. `app.redis.get('r1')` → `'r1'`. Leave empty for the default client. |
@@ -212,8 +212,43 @@ await swd.sessionHub.send(imei, message);
 | `chainPath` | `''` | Directory of handler classes, relative to the app base directory. |
 | `inChain` | `[]` | Names of the in-chain handlers, executed in array order. |
 | `outChain` | `[]` | Names of the out-chain handlers, executed in array order. |
+| `tls` | `{ enable: false }` | TLS settings, see [TLS](#tls). |
 
 A handler's name is the name Egg's loader gives its file: `dispatcher.js` → `dispatcher`, `in/auth.js` → `in.auth`.
+
+## TLS
+
+Set `tls.enable` on a client to make its server speak TLS instead of plain TCP. Handlers, sessions and Pub/Sub work exactly the same; handlers receive the decrypted data.
+
+```js
+exports.tcp = {
+  client: {
+    port: 8883,
+    sessionKeyCacheKey: 'tcp:ect:session:key',
+    sessionIdCacheKey: 'tcp:ect:session:id',
+    tls: {
+      enable: true,
+      key: 'config/certs/server.key',   // file path (absolute or relative to the app base dir), PEM string or Buffer
+      cert: 'config/certs/server.crt',
+    },
+  },
+};
+```
+
+- `key`, `cert`, `ca` and `pfx` may be file paths, PEM strings or `Buffer`s. `key` and `pfx` also accept Node's object form, `[{ pem, passphrase }]` / `[{ buf, passphrase }]`, where `pem` / `buf` may again be a file path, a PEM string or a Buffer. Every other option in `tls` is passed unchanged to Node's [`tls.createServer()`](https://nodejs.org/api/tls.html#tlscreateserveroptions-secureconnectionlistener), so `minVersion`, `ciphers`, `handshakeTimeout`, `requestCert` + `ca` (mutual TLS) and so on all work.
+- A port is either plain TCP or TLS, never both. Use two `clients` if you need both.
+- With `clients`, the plugin defaults are not merged into each client, so write `tls: { enable: true, key, cert }` for each client that needs it.
+- Failed handshakes (plain TCP talking to a TLS port, port scanners, ...) are logged as warnings and dropped.
+- The device firmware must support TLS and trust your certificate.
+- To read the certificate of a device in a handler with mutual TLS, use `sessionHub.getPeerCertificate(sessionId)`.
+- Certificates are read once at startup; restart the workers after renewing them.
+
+To try it locally:
+
+```bash
+openssl req -x509 -newkey rsa:2048 -nodes -keyout server.key -out server.crt -days 365 -subj "/CN=localhost"
+openssl s_client -connect 127.0.0.1:8883
+```
 
 ## Handlers
 
@@ -260,11 +295,19 @@ Runs the out chain and writes to the device.
 - Device connected to this process: resolves `true` once the data was handed to the socket (`false` if the connection is gone or the out chain failed).
 - Device connected elsewhere: the command is published over Pub/Sub and the worker that owns the connection sends it. `true` only means "published"; it does not mean the device received the data. `false` means the device has no online record in Redis, or an error occurred.
 
+**Ordering.** Every `send()` call runs the out chain on its own and writes to the socket when the chain finishes. When the out-chain handlers do asynchronous work (encryption through a remote service, a database lookup, ...), two calls made back to back (`send(A)` then `send(B)`) are **not guaranteed** to reach the device in that order. If your protocol needs strict ordering:
+
+- `await` the first `send()` before calling the next one, or
+- put the commands into a single message.
+
+Messages published over Pub/Sub by different processes have no defined order either.
+
 ### Other methods
 
 - `sessionHub.getSession(sessionKey)`: the local session, or `null`.
 - `sessionHub.getKeys()`: device keys connected to this process.
-- `session.send(message)`, `session.close()`.
+- `sessionHub.getPeerCertificate(sessionId)`: the certificate of a device connected over TLS with mutual TLS enabled, or `null` if the session is gone or the connection is not TLS. An empty object means the device presented no certificate.
+- `sessionHub.kickout(sessionKey)`: disconnects a device. Resolves `true` if the connection was closed in this process, or if the command was published to the workers (it does not mean the device is already offline); `false` if the device has no online record or an error occurred.
 
 ## Clustering
 
@@ -304,7 +347,14 @@ sessionIdCacheKey: 'tcp:{swd}:session:id',
 
 ### RabbitMQ reconnects
 
-After `egg-rabbitmq` re-establishes its connection, call `app.tcpPubSub.restart()` to resubscribe.
+Only needed when `pubSubType` is `rabbit` (the Redis client resubscribes by itself). After `egg-rabbitmq` re-establishes its connection, call:
+
+```js
+// inside the reconnect callback of your rabbit plugin (an async function)
+await app.tcpPubSub?.restart?.();
+```
+
+Messages broadcast while the connection was down are lost.
 
 ## Lifecycle
 
@@ -315,10 +365,10 @@ After `egg-rabbitmq` re-establishes its connection, call `app.tcpPubSub.restart(
 ## TypeScript
 
 ```ts
-import { Chain } from 'egg-cute-tcp';
+import { Chain, TcpSession, TcpSessionHub } from 'egg-cute-tcp';
 
 export default class Dispatcher extends Chain {
-  async handle(session, message, sessionHub) {
+  async handle(session: TcpSession, message, sessionHub: TcpSessionHub) {
     return { message };
   }
 }
